@@ -20,14 +20,18 @@ class RichAndMortyDataSet(Dataset):
     Methods:
         __len__: Returns the number of items in the dataset.
         __getitem__: Retrieves and returns data at the specified index.
-        exists_data: Checks if the dataset file exists.
-        get_character_url: Constructs the URL for API requests.
-        parse_results: Parses API response data into a structured format.
-        retrive_tabular_data: Fetches data from the API.
-        prepare_data: Encodes categorical data fields.
     """
 
     def __init__(self, path="data", transform=None, base_url="rickandmortyapi.com"):
+        """
+        Initializes the dataset object, loads or retrieves data, and prepares the image directory.
+
+        Parameters:
+            path (str): Base directory for storing dataset files. Defaults to '/data'.
+            transform (callable, optional): A function/transform that takes in a PIL image and returns a transformed version.
+            base_url (str): The base URL for the Rick and Morty API. Defaults to "rickandmortyapi.com".
+        """
+
         # Create the folder if it does not exist
         os.makedirs(path, exist_ok=True)
         self.transform = transform
@@ -38,19 +42,29 @@ class RichAndMortyDataSet(Dataset):
         data_path = os.path.join(path, "data.csv")
         if self._exists_data(path):
             self.data_df = pd.read_csv(data_path)
+            self._prepare_data()
         else:
             self.data_df = self._retrive_tabular_data()
             self._prepare_data()
             self.data_df.to_csv(data_path, index=False)
 
     def __len__(self):
+        """
+        Returns the number of items in the dataset.
+        """
         return len(self.data_df)
 
     def __getitem__(self, idx):
+        """
+        Retrieves and returns data at the specified index.
+
+        Args:
+            idx (int): The index of the data to retrieve.
+        """
         # Get row
         row = self.data_df.iloc[idx]
         # Get species and image
-        species_t = torch.tensor(row["species"])  # Convert to tensor
+        species_t = torch.tensor(row["species_cat"])  # Convert to tensor
         image_url = row["image_url"]  # Remote URL of the image
         image_name = row["image_name"]  # Image name
         image_local_path = self.img_folder + "/" + image_name  # Local path of the image
@@ -78,6 +92,12 @@ class RichAndMortyDataSet(Dataset):
         return os.path.exists(path + "/data.csv")
 
     def _get_character_url(self, page=1):
+        """
+        Builds the URL to retrieve characters data from the Rick and Morty API.
+
+        Args:
+            page (int): The page number to retrieve.
+        """
         protocol = "https"
         path = "api/character"
         params = ""
@@ -88,6 +108,12 @@ class RichAndMortyDataSet(Dataset):
         return urlunparse((protocol, self.base_url, path, params, query_string, ""))
 
     def _parse_results(self, results):
+        """
+        Parses the results from the API response and returns a list of dictionaries containing character data.
+
+        Args:
+            results (list): A list of dictionaries containing character data.
+        """
         characters = []
         for character in results:
             characters.append(
@@ -100,6 +126,9 @@ class RichAndMortyDataSet(Dataset):
         return characters
 
     def _retrive_tabular_data(self):
+        """
+        Retrieves character data from the Rick and Morty API and returns it as a Pandas DataFrame.
+        """
         page = 1
         characters_list = []
 
@@ -122,5 +151,9 @@ class RichAndMortyDataSet(Dataset):
         return pd.DataFrame(characters_list)
 
     def _prepare_data(self):
-        self.data_df["species_c"] = pd.Categorical(self.data_df["species"])
-        self.data_df["species"] = self.data_df["species_c"].cat.codes
+        """
+        Prepares the data by converting the species column to a categorical column and adding a numerical category column.
+        """
+        self.data_df["species_name"] = pd.Categorical(self.data_df["species"])
+        self.data_df["species_cat"] = self.data_df["species_name"].cat.codes
+        self.classes = self.data_df["species_name"].cat.categories
